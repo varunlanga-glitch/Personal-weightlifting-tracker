@@ -1,25 +1,16 @@
 // ── main.js ──────────────────────────────────────────────────
 import { createClient }            from '@supabase/supabase-js'
+import { Chart }                   from 'chart.js/auto'
 import { initUI }                  from './modules/ui.js'
 import { loadUnitFromDB, getUnit, setUnit } from './modules/units.js'
 import { generateProgramWeeksRows, BASELINE } from './modules/program.js'
+
+window.Chart = Chart
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
 )
-
-// Load Chart.js from CDN (keeps bundle lean)
-function loadChartJS () {
-  return new Promise((resolve, reject) => {
-    if (window.Chart) return resolve()
-    const s = document.createElement('script')
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js'
-    s.onload = resolve
-    s.onerror = () => reject(new Error('Failed to load Chart.js'))
-    document.head.appendChild(s)
-  })
-}
 
 async function seedProgramWeeks () {
   const { data } = await supabase.from('program_weeks').select('id').limit(1)
@@ -29,10 +20,7 @@ async function seedProgramWeeks () {
 }
 
 async function init () {
-  await Promise.all([
-    loadChartJS(),
-    loadUnitFromDB(supabase),
-  ])
+  await loadUnitFromDB(supabase)
 
   seedProgramWeeks().catch(console.error)
 
