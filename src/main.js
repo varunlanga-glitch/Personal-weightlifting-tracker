@@ -11,11 +11,12 @@ const supabase = createClient(
 
 // Load Chart.js from CDN (keeps bundle lean)
 function loadChartJS () {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (window.Chart) return resolve()
     const s = document.createElement('script')
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js'
     s.onload = resolve
+    s.onerror = () => reject(new Error('Failed to load Chart.js'))
     document.head.appendChild(s)
   })
 }
