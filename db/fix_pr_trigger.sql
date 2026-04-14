@@ -6,64 +6,97 @@
 --             foreign key constraint "personal_records_set_id_fkey"'
 --   details: 'Key is not present in table "sets".'
 --
--- Cause: The PR-detection trigger fires BEFORE INSERT on sets (or uses
--- OLD/NEW in a way that inserts into personal_records before the parent
--- sets row exists). personal_records.set_id has an FK to sets(id), so
--- the FK check fails.
+-- Cause: The original trg_check_pr trigger ran BEFORE INSERT/UPDATE on
+-- public.sets and tried to INSERT INTO personal_records with
+-- set_id = NEW.id. The parent sets row didn't exist yet at BEFORE-time,
+-- so the FK personal_records.set_id -> sets(id) failed.
 --
--- Run steps 1 and 2 in the Supabase SQL Editor:
+-- Fix: split the logic into two triggers.
+--   - BEFORE trigger flags NEW.is_pr (must be BEFORE so the column is
+--     written with the row).
+--   - AFTER trigger does the personal_records upsert (NEW.id is now a
+--     valid FK target).
+--
+-- This file matches the migration applied to project scagcmcbayimzmcmggqr
+-- via supabase MCP: name "fix_pr_trigger_split_before_after".
 
--- 1) See what triggers exist on sets
-SELECT tgname, tgtype,
-       pg_get_triggerdef(oid) AS definition
-FROM   pg_trigger
-WHERE  tgrelid = 'public.sets'::regclass
-AND    NOT tgisinternal;
-
--- 2) Replace the function body so it runs AFTER the set is committed.
---    Adjust the function name if step 1 shows a different one.
---    This version:
---      - runs AFTER INSERT, so NEW.id is guaranteed valid
---      - only creates a personal_records row when the new set's weight
---        beats the current PR for that exercise
---      - marks the winning set's is_pr flag in place
-
-CREATE OR REPLACE FUNCTION public.detect_pr()
-RETURNS TRIGGER
+CREATE OR REPLACE FUNCTION public.mark_pr_before()
+RETURNS trigger
 LANGUAGE plpgsql
+SET search_path TO 'public'
 AS $$
 DECLARE
-  prev_best NUMERIC;
-  new_kg    NUMERIC;
+  v_kg_total numeric;
+  v_pr_total numeric;
 BEGIN
-  new_kg := NEW.kg_whole + CASE WHEN NEW.kg_half THEN 0.5 ELSE 0 END;
-
-  SELECT COALESCE(MAX(kg_whole + CASE WHEN kg_half THEN 0.5 ELSE 0 END), 0)
-    INTO prev_best
-    FROM public.personal_records
-   WHERE exercise = NEW.exercise;
-
-  IF NEW.completed AND NEW.reps = 1 AND new_kg > prev_best THEN
-    -- flag the set itself
-    UPDATE public.sets
-       SET is_pr = TRUE
-     WHERE id = NEW.id;
-
-    -- record the PR
-    INSERT INTO public.personal_records (exercise, kg_whole, kg_half, achieved_on, set_id)
-    VALUES (NEW.exercise, NEW.kg_whole, NEW.kg_half, CURRENT_DATE, NEW.id);
+  IF NEW.completed = false OR NEW.exercise = 'accessory' THEN
+    RETURN NEW;
   END IF;
 
-  RETURN NULL;  -- AFTER triggers ignore the return value, but NULL is explicit
+  v_kg_total := NEW.kg_whole + CASE WHEN NEW.kg_half THEN 0.5 ELSE 0 END;
+
+  SELECT kg_whole + CASE WHEN kg_half THEN 0.5 ELSE 0 END
+    INTO v_pr_total
+    FROM personal_records
+   WHERE exercise = NEW.exercise;
+
+  IF v_pr_total IS NULL OR v_kg_total > v_pr_total THEN
+    NEW.is_pr := TRUE;
+  ELSE
+    NEW.is_pr := COALESCE(NEW.is_pr, FALSE);
+  END IF;
+
+  RETURN NEW;
 END;
 $$;
 
-DROP TRIGGER IF EXISTS sets_detect_pr ON public.sets;
-CREATE TRIGGER sets_detect_pr
-AFTER INSERT ON public.sets
-FOR EACH ROW
-EXECUTE FUNCTION public.detect_pr();
+CREATE OR REPLACE FUNCTION public.record_pr_after()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_kg_total numeric;
+  v_pr_whole integer;
+  v_pr_half  boolean;
+BEGIN
+  IF NEW.is_pr IS NOT TRUE THEN
+    RETURN NULL;
+  END IF;
 
--- 3) (optional) If step 1 showed a differently-named old trigger,
---    drop it too so it doesn't run alongside the new one:
--- DROP TRIGGER IF EXISTS <old_trigger_name> ON public.sets;
+  v_kg_total := NEW.kg_whole + CASE WHEN NEW.kg_half THEN 0.5 ELSE 0 END;
+  v_pr_whole := floor(v_kg_total)::integer;
+  v_pr_half  := (v_kg_total - floor(v_kg_total)) >= 0.5;
+
+  INSERT INTO personal_records (exercise, kg_whole, kg_half, achieved_on, set_id, updated_at)
+  VALUES (
+    NEW.exercise,
+    v_pr_whole,
+    v_pr_half,
+    (SELECT date FROM sessions WHERE id = NEW.session_id),
+    NEW.id,
+    now()
+  )
+  ON CONFLICT (exercise) DO UPDATE SET
+    kg_whole    = excluded.kg_whole,
+    kg_half     = excluded.kg_half,
+    achieved_on = excluded.achieved_on,
+    set_id      = excluded.set_id,
+    updated_at  = now();
+
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_check_pr ON public.sets;
+
+DROP TRIGGER IF EXISTS trg_mark_pr_before  ON public.sets;
+DROP TRIGGER IF EXISTS trg_record_pr_after ON public.sets;
+
+CREATE TRIGGER trg_mark_pr_before
+BEFORE INSERT OR UPDATE ON public.sets
+FOR EACH ROW EXECUTE FUNCTION public.mark_pr_before();
+
+CREATE TRIGGER trg_record_pr_after
+AFTER INSERT OR UPDATE ON public.sets
+FOR EACH ROW EXECUTE FUNCTION public.record_pr_after();
