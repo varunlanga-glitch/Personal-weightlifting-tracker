@@ -421,10 +421,18 @@ function attachSheetListeners (sheet, supabase, ex, setNum, existingSet, today, 
         if (idx !== -1) setsData[ex][idx] = { ...setsData[ex][idx], ...updated }
         toast('Set updated', 'success')
       } else {
+        // Compute the next unused set_number from the DB, not the UI position.
+        // The UI index can collide after a delete or with orphaned rows from a
+        // prior half-failed save, which triggers a 409 on the unique constraint
+        // (session_id, exercise, set_number).
+        const existing = setsData[ex] || []
+        const nextSetNum = existing.reduce(
+          (m, s) => Math.max(m, s.set_number || 0), 0
+        ) + 1
         const saved = await logSet(supabase, {
           session_id: sessionData.id,
           exercise: ex,
-          set_number: setNum,
+          set_number: nextSetNum,
           kgDisplay: drumVal,
           reps: selReps,
           rpe: selRpe,
