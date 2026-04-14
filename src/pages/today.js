@@ -23,6 +23,7 @@ export async function renderToday (container, { supabase }) {
 
   weekPlan = getWeekPlan(weekNum)
   dayPlan  = dayLabel ? weekPlan.days[dayLabel] : null
+  programOverrides = settings.data?.baselines || {}
 
   // Load or create session
   sessionData = await getTodaySession(supabase, today)
@@ -334,7 +335,8 @@ function attachTodayListeners (container, supabase, today, weekNum, dayLabel) {
 
 function attachSheetListeners (sheet, supabase, ex, setNum, existingSet, today, weekNum, dayLabel, container) {
   let drumVal = parseFloat(sheet.querySelector('#drum-val').textContent)
-  let selReps = existingSet?.reps || 2
+  // Read the initially active rep button so we honour targetReps pre-selection
+  let selReps = parseInt(sheet.querySelector('.rep-btn.active')?.dataset.reps) || existingSet?.reps || 2
   let selRpe  = existingSet?.rpe  || 7
   const convEl = sheet.querySelector('#drum-conversion')
   updateDrumConversion(drumVal, convEl)
@@ -424,7 +426,7 @@ function attachSheetListeners (sheet, supabase, ex, setNum, existingSet, today, 
       closeSheet()
       // Re-render today page
       const page = document.getElementById('page')
-      renderToday(page, { supabase })
+      await renderToday(page, { supabase })
     } catch (err) {
       toast('Error saving set', 'error')
       btn.disabled = false
