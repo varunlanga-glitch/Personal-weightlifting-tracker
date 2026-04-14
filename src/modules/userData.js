@@ -225,10 +225,17 @@ export async function getUserSettings (supabase) {
 
 export async function updateUserSettings (supabase, updates) {
   const settings = await getUserSettings(supabase)
-  if (!settings) return
+  if (settings) {
+    const { error } = await supabase
+      .from('user_settings')
+      .update(updates)
+      .eq('id', settings.id)
+    if (error) throw error
+    return
+  }
+  // First-run user — no row exists yet. Insert instead of silently no-oping.
   const { error } = await supabase
     .from('user_settings')
-    .update(updates)
-    .eq('id', settings.id)
+    .insert(updates)
   if (error) throw error
 }

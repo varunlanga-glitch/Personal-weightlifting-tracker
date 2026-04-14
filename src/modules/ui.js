@@ -91,6 +91,8 @@ export function closeSheet () {
   const sheet  = document.getElementById('bottom-sheet')
   const overlay = document.getElementById('sheet-overlay')
   if (sheet) {
+    // Let listeners tear down intervals, global listeners, etc.
+    sheet.dispatchEvent(new CustomEvent('sheet-cleanup'))
     sheet.classList.remove('open')
     setTimeout(() => {
       sheet.innerHTML = ''

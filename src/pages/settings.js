@@ -4,6 +4,15 @@ import { getUserSettings, updateUserSettings } from '../modules/userData.js'
 import { BASELINE, TARGETS }        from '../modules/program.js'
 import { toast }                    from '../modules/ui.js'
 
+// Local-date YYYY-MM-DD; avoids UTC skew near midnight.
+function localDateString () {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export async function renderSettings (container, { supabase }) {
   const settings = await getUserSettings(supabase)
   const unit     = getUnit()
@@ -36,7 +45,7 @@ export async function renderSettings (container, { supabase }) {
           <div class="body-sm muted mb-1">Used to calculate current week number. Change only if restarting the program.</div>
           <input type="date"
             id="start-date"
-            value="${settings?.program_start_date || new Date().toISOString().split('T')[0]}"
+            value="${settings?.program_start_date || localDateString()}"
             style="width:100%;padding:.625rem .75rem;border:1px solid var(--border-med);border-radius:var(--radius-md);font-family:var(--font-body);font-size:15px;background:var(--bg-surface);color:var(--ink);margin-top:.25rem"
           />
           <button class="btn-secondary mt-1" id="save-date" style="width:100%">Save date</button>
