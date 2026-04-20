@@ -71,7 +71,7 @@ def get_last_sets_for_exercise(supabase, exercise: str, exclude_session_id: str 
         .limit(60)
         .execute()
     )
-    if not result.data:
+    if result is None or not result.data:
         return []
     seen: dict = {}
     order: list = []
