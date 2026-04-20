@@ -25,6 +25,7 @@ if not supabase:
 settings_data = user_data.get_user_settings(supabase)
 unit = st.session_state.get("unit", settings_data.get("preferred_unit", "lbs") if settings_data else "lbs")
 baselines = (settings_data.get("baselines") or program.BASELINE) if settings_data else program.BASELINE
+targets = (settings_data.get("targets") or program.TARGETS) if settings_data else program.TARGETS
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,7 @@ def _get_prs(_sb):
 
 def _make_chart(exercise: str, ex_label: str) -> go.Figure:
     history = _get_history(supabase, exercise)
-    target = program.TARGETS.get(exercise)
+    target = targets.get(exercise)
 
     fig = go.Figure()
 
@@ -132,7 +133,6 @@ with tab_prs:
             c3.caption(date_achieved)
         st.divider()
 
-    # Also show best sets from history as implied PRs
     st.subheader("Best Est. 1RM from logged sets")
     for ex, label in PRIMARY_EXERCISES:
         history = _get_history(supabase, ex)
@@ -154,11 +154,11 @@ with tab_milestones:
 
     for ex, label in PRIMARY_EXERCISES:
         history = _get_history(supabase, ex)
-        target = program.TARGETS.get(ex)
+        target = targets.get(ex)
         if not target:
             continue
 
-        milestone = milestones.project_milestone(history, target, exercise=ex)
+        milestone = milestones.project_milestone(history, target, exercise=ex, user_baselines=baselines)
         current_est = history[-1]["est1rm"] if history else None
 
         st.markdown(f"**{label}**")

@@ -28,9 +28,9 @@ def _load_settings(_sb):
 
 settings = _load_settings(supabase)
 
-# Defaults if no settings exist yet
 current_unit = settings.get("preferred_unit", "lbs") if settings else "lbs"
 current_baselines = (settings.get("baselines") or program.BASELINE) if settings else program.BASELINE
+current_targets = (settings.get("targets") or program.TARGETS) if settings else program.TARGETS
 current_start = settings.get("program_start_date", "2024-01-01") if settings else "2024-01-01"
 
 # ── Unit preference ───────────────────────────────────────────────────────────
@@ -42,6 +42,11 @@ unit_choice = st.radio(
     index=0 if current_unit == "lbs" else 1,
     horizontal=True,
 )
+
+display_unit = unit_choice
+step = units.drum_step(display_unit)
+lo = units.drum_min(display_unit)
+hi = units.drum_max(display_unit)
 
 # ── Program start date ────────────────────────────────────────────────────────
 
@@ -58,12 +63,7 @@ st.caption(f"Current week: {week_num} / 52")
 # ── Baseline 1RMs ─────────────────────────────────────────────────────────────
 
 st.subheader("Baseline 1RMs")
-st.caption("Your starting 1RM values used to calculate training loads.")
-
-display_unit = unit_choice
-step = units.drum_step(display_unit)
-lo = units.drum_min(display_unit)
-hi = units.drum_max(display_unit)
+st.caption("Starting 1RM values used to calculate training loads.")
 
 baseline_exercises = [
     ("snatch", "Snatch"),
@@ -92,24 +92,30 @@ for i, (ex, label) in enumerate(baseline_exercises):
 # ── Year-end targets ──────────────────────────────────────────────────────────
 
 st.subheader("Year-End Targets")
-st.caption("Goal 1RMs for milestone tracking and projections.")
+st.caption("Goal 1RMs for milestone tracking and trend projections.")
 
-current_targets = program.TARGETS  # targets are fixed in program logic for now
 target_exercises = [
     ("snatch", "Snatch"),
     ("clean_and_jerk", "Clean & Jerk"),
     ("back_squat", "Back Squat"),
 ]
 
-st.info(
-    "Targets: "
-    + "  |  ".join(
-        f"{label}: {units.format_weight(current_targets[ex], display_unit)}"
-        for ex, label in target_exercises
-        if ex in current_targets
-    )
-)
-st.caption("To change targets, edit `program.TARGETS` in `modules/program.py`.")
+new_targets = {}
+t_cols = st.columns(2)
+for i, (ex, label) in enumerate(target_exercises):
+    kg_val = float(current_targets.get(ex) or program.TARGETS.get(ex, 100))
+    disp_val = units.kg_to_display(kg_val, display_unit)
+    with t_cols[i % 2]:
+        entered = st.number_input(
+            f"{label} target ({display_unit})",
+            min_value=lo,
+            max_value=hi,
+            value=float(disp_val),
+            step=step,
+            format="%.1f" if display_unit == "kg" else "%.2f",
+            key=f"target_{ex}",
+        )
+        new_targets[ex] = round(units.display_to_kg(entered, display_unit) * 2) / 2
 
 # ── Save ──────────────────────────────────────────────────────────────────────
 
@@ -119,6 +125,7 @@ if st.button("Save Settings", type="primary"):
         "preferred_unit": unit_choice,
         "program_start_date": start_date.isoformat(),
         "baselines": new_baselines,
+        "targets": new_targets,
     })
     st.session_state.unit = unit_choice
     st.cache_data.clear()

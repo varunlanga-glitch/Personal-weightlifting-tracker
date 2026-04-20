@@ -6,7 +6,9 @@ def _fmt(exercise: str) -> str:
     return exercise.replace("_", " ")
 
 
-def analyse_sessions(recent_sessions: list) -> list:
+def analyse_sessions(recent_sessions: list, is_deload: bool = False) -> list:
+    if is_deload:
+        return []
     suggestions = []
     two_weeks_ago = datetime.now() - timedelta(days=14)
 
@@ -79,8 +81,8 @@ def analyse_sessions(recent_sessions: list) -> list:
     return suggestions
 
 
-def run_adaptation_check(supabase, recent_sessions: list, existing_pending: list):
-    suggestions = analyse_sessions(recent_sessions)
+def run_adaptation_check(supabase, recent_sessions: list, existing_pending: list, is_deload: bool = False):
+    suggestions = analyse_sessions(recent_sessions, is_deload=is_deload)
     existing_keys = {
         f"{s['suggestion_type']}:{s['exercise'] or 'null'}" for s in existing_pending
     }

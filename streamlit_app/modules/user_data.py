@@ -35,6 +35,10 @@ def update_session_feel(supabase, session_id: str, body_feel: str):
     supabase.table("sessions").update({"body_feel": body_feel}).eq("id", session_id).execute()
 
 
+def update_session_accessories(supabase, session_id: str, accessories_done: list):
+    supabase.table("sessions").update({"accessories_done": accessories_done}).eq("id", session_id).execute()
+
+
 def update_session_notes(supabase, session_id: str, notes: str):
     supabase.table("sessions").update({"notes": notes}).eq("id", session_id).execute()
 
@@ -55,6 +59,34 @@ def get_recent_sessions(supabase, limit: int = 14):
 
 
 # ── Sets ──────────────────────────────────────────────────────────────────────
+
+def get_last_sets_for_exercise(supabase, exercise: str, exclude_session_id: str = None):
+    """Return sets from the most recent prior session that logged this exercise."""
+    result = (
+        supabase.table("sets")
+        .select("*, sessions(date)")
+        .eq("exercise", exercise)
+        .eq("completed", True)
+        .order("created_at", desc=True)
+        .limit(60)
+        .execute()
+    )
+    if not result.data:
+        return []
+    seen: dict = {}
+    order: list = []
+    for s in result.data:
+        sid = s.get("session_id")
+        if sid not in seen:
+            seen[sid] = []
+            order.append(sid)
+        seen[sid].append(s)
+    for sid in order:
+        if sid == exclude_session_id:
+            continue
+        return sorted(seen[sid], key=lambda x: x.get("set_number", 0))
+    return []
+
 
 def get_sets_for_session(supabase, session_id: str):
     result = (
@@ -87,7 +119,7 @@ def log_set(
             "kg_whole": cols["kg_whole"],
             "kg_half": cols["kg_half"],
             "reps": reps,
-            "rpe": int(round(rpe)) if rpe is not None else None,
+            "rpe": float(rpe) if rpe is not None else None,
             "completed": True,
             "notes": notes,
         })
