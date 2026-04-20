@@ -5,7 +5,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    load_dotenv(os.path.join(_root, ".env"))
+    load_dotenv(os.path.join(_root, ".env.production"), override=False)
 except ImportError:
     pass
 
