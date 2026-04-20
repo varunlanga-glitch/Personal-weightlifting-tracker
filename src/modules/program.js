@@ -10,6 +10,13 @@ export const BASELINE = {
   clean_and_jerk: 60,
   back_squat:     93,   // 205 lbs ≈ 93kg
   front_squat:    76,   // ~82% of back squat
+  // Accessory lifts share the parent lift's baseline;
+  // the extra pct multiplier in getDayPlan handles the relative intensity.
+  snatch_pull:    60,   // pct +10% applied in program — effectively ~110% of snatch
+  clean_pull:     60,   // pct +10% applied in program — effectively ~110% of clean
+  jerk:           60,   // same base as clean_and_jerk
+  push_press:     60,   // pct *0.75 applied in program
+  overhead_squat: 60,   // pct *0.80 applied in program
 }
 
 // ── Yearly targets ───────────────────────────────────────────

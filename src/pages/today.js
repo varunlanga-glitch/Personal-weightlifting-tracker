@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { getUnit, display, unitLabel, drumStep, drumStepLarge, drumMin, drumMax, snapToStep, kgToSnapped, kgToCols, colsToKg, drumValueToCols } from '../modules/units.js'
-import { getTodaySession, createSession, updateSessionFeel, getSetsForSession, logSet, updateSet, deleteSet } from '../modules/userData.js'
+import { getTodaySession, createSession, updateSessionFeel, getSetsForSession, logSet, updateSet, deleteSet, completeSession } from '../modules/userData.js'
 import { getWeekPlan, currentWeekNumber, todayDayLabel, targetKg, BASELINE } from '../modules/program.js'
 import { openSheet, closeSheet, toast, confirm } from '../modules/ui.js'
 
@@ -15,7 +15,7 @@ let dayPlan      = null
 let programOverrides = {}
 
 export async function renderToday (container, { supabase }) {
-  const today      = new Date().toISOString().split('T')[0]
+  const today      = localDateString()
   const settings   = await supabase.from('user_settings').select('*').single()
   const startDate  = settings.data?.program_start_date || today
   const weekNum    = currentWeekNumber(startDate)
@@ -23,6 +23,8 @@ export async function renderToday (container, { supabase }) {
 
   weekPlan = getWeekPlan(weekNum)
   dayPlan  = dayLabel ? weekPlan.days[dayLabel] : null
+  // Saved baselines are merged into BASELINE at app init (main.js); programOverrides
+  // is reserved for per-exercise adaptation overrides applied via applyAcceptedSuggestion.
 
   // Load or create session
   sessionData = await getTodaySession(supabase, today)
@@ -44,6 +46,14 @@ export async function renderToday (container, { supabase }) {
       setsData[s.exercise].push(s)
     }
     feelLocked = sets.length > 0
+
+    // Auto-complete the session once every main lift has its required sets logged.
+    if (!sessionData.completed && dayPlan && allExercisesDone(dayPlan, setsData)) {
+      try {
+        await completeSession(supabase, sessionData.id)
+        sessionData.completed = true
+      } catch (e) { console.error('completeSession failed', e) }
+    }
   }
 
   container.innerHTML = buildTodayHTML(today, weekNum, dayLabel, weekPlan, dayPlan)
@@ -334,7 +344,8 @@ function attachTodayListeners (container, supabase, today, weekNum, dayLabel) {
 
 function attachSheetListeners (sheet, supabase, ex, setNum, existingSet, today, weekNum, dayLabel, container) {
   let drumVal = parseFloat(sheet.querySelector('#drum-val').textContent)
-  let selReps = existingSet?.reps || 2
+  // Read the initially active rep button so we honour targetReps pre-selection
+  let selReps = parseInt(sheet.querySelector('.rep-btn.active')?.dataset.reps) || existingSet?.reps || 2
   let selRpe  = existingSet?.rpe  || 7
   const convEl = sheet.querySelector('#drum-conversion')
   updateDrumConversion(drumVal, convEl)
@@ -354,15 +365,21 @@ function attachSheetListeners (sheet, supabase, ex, setNum, existingSet, today, 
   }
 
   function startHold (dir) {
+    clearInterval(holdTimer)
     holdTimer = setInterval(() => doAdj(dir), 80)
   }
-  function stopHold () { clearInterval(holdTimer) }
+  function stopHold () { clearInterval(holdTimer); holdTimer = null }
 
   sheet.querySelector('#drum-up').addEventListener('click', () => doAdj(1))
   sheet.querySelector('#drum-dn').addEventListener('click', () => doAdj(-1))
   sheet.querySelector('#drum-up').addEventListener('pointerdown', () => startHold(1))
   sheet.querySelector('#drum-dn').addEventListener('pointerdown', () => startHold(-1))
-  document.addEventListener('pointerup', stopHold, { once: true })
+  // Persistent pointerup so every hold stops cleanly; removed when the sheet closes.
+  document.addEventListener('pointerup', stopHold)
+  sheet.addEventListener('sheet-cleanup', () => {
+    stopHold()
+    document.removeEventListener('pointerup', stopHold)
+  }, { once: true })
 
   // Reps
   sheet.querySelectorAll('.rep-btn').forEach(btn => {
@@ -404,10 +421,18 @@ function attachSheetListeners (sheet, supabase, ex, setNum, existingSet, today, 
         if (idx !== -1) setsData[ex][idx] = { ...setsData[ex][idx], ...updated }
         toast('Set updated', 'success')
       } else {
+        // Compute the next unused set_number from the DB, not the UI position.
+        // The UI index can collide after a delete or with orphaned rows from a
+        // prior half-failed save, which triggers a 409 on the unique constraint
+        // (session_id, exercise, set_number).
+        const existing = setsData[ex] || []
+        const nextSetNum = existing.reduce(
+          (m, s) => Math.max(m, s.set_number || 0), 0
+        ) + 1
         const saved = await logSet(supabase, {
           session_id: sessionData.id,
           exercise: ex,
-          set_number: setNum,
+          set_number: nextSetNum,
           kgDisplay: drumVal,
           reps: selReps,
           rpe: selRpe,
@@ -424,7 +449,7 @@ function attachSheetListeners (sheet, supabase, ex, setNum, existingSet, today, 
       closeSheet()
       // Re-render today page
       const page = document.getElementById('page')
-      renderToday(page, { supabase })
+      await renderToday(page, { supabase })
     } catch (err) {
       toast('Error saving set', 'error')
       btn.disabled = false
@@ -453,6 +478,23 @@ function attachSheetListeners (sheet, supabase, ex, setNum, existingSet, today, 
 }
 
 // ── Helpers ───────────────────────────────────────────────────
+
+// YYYY-MM-DD for the user's LOCAL date — avoids midnight UTC skew.
+function localDateString () {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function allExercisesDone (dayPlan, setsByExercise) {
+  for (const ex of dayPlan.exercises) {
+    const logged = (setsByExercise[ex.exercise] || []).filter(s => s.completed).length
+    if (logged < ex.sets) return false
+  }
+  return true
+}
 
 function formatExName (exercise) {
   const names = {

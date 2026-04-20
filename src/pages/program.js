@@ -15,7 +15,7 @@ export async function renderProgram (container, { supabase }) {
     getRecentSessions(supabase, 14),
   ])
 
-  const startDate = settings?.program_start_date || new Date().toISOString().split('T')[0]
+  const startDate = settings?.program_start_date || localDateString()
   const weekNum   = currentWeekNumber(startDate)
   const weekPlan  = getWeekPlan(weekNum)
   const meso      = getMeso(weekNum)
@@ -149,4 +149,13 @@ function mesoBlock (m, currentWeek) {
 
 function formatEx (ex) {
   return ex.replace(/_/g,' ').replace(/\b\w/g, l=>l.toUpperCase())
+}
+
+// Local-date YYYY-MM-DD; avoids UTC skew near midnight.
+function localDateString () {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }

@@ -71,7 +71,7 @@ export function analyseSessions (recentSessions) {
   }
 
   // ── Check per-exercise RPE trends ──────────────────────
-  const exercises = ['snatch', 'clean_and_jerk', 'back_squat']
+  const exercises = ['snatch', 'snatch_pull', 'clean_and_jerk', 'clean_pull', 'back_squat']
   for (const ex of exercises) {
     const exSets = recent.flatMap(s =>
       (s.sets || []).filter(set => set.exercise === ex && set.completed && set.rpe)
