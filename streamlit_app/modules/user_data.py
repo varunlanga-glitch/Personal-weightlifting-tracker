@@ -87,7 +87,7 @@ def log_set(
             "kg_whole": cols["kg_whole"],
             "kg_half": cols["kg_half"],
             "reps": reps,
-            "rpe": rpe,
+            "rpe": int(round(rpe)) if rpe is not None else None,
             "completed": True,
             "notes": notes,
         })
