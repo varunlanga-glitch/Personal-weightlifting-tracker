@@ -12,7 +12,7 @@ def estimate_1rm(kg: float, reps: int) -> float:
 
 def get_today_session(supabase, date: str):
     result = supabase.table("sessions").select("*").eq("date", date).maybe_single().execute()
-    return result.data
+    return result.data if result is not None else None
 
 
 def create_session(supabase, date: str, week_number: int, mesocycle: int, day_label: str):
@@ -172,7 +172,7 @@ def create_suggestion(supabase, suggestion: dict):
 
 def get_user_settings(supabase):
     result = supabase.table("user_settings").select("*").maybe_single().execute()
-    return result.data
+    return result.data if result is not None else None
 
 
 def upsert_user_settings(supabase, updates: dict):
