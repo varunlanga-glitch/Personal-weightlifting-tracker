@@ -37,6 +37,18 @@ if not sessions:
     st.info("No sessions logged yet. Start your first session on the Today page.")
     st.stop()
 
+# ── Build previous-same-day lookup for comparisons ────────────────────────────
+
+same_day_prev: dict = {}  # day_label -> most recent prior session
+prev_by_id: dict = {}     # session_id -> previous same-day session
+
+for s in reversed(sessions):  # oldest to newest
+    dl = s.get("day_label")
+    if dl:
+        if dl in same_day_prev:
+            prev_by_id[s["id"]] = same_day_prev[dl]
+        same_day_prev[dl] = s
+
 # ── Render sessions ───────────────────────────────────────────────────────────
 
 feel_emoji = {"good": "✅", "caution": "⚠️", "flag": "🚩"}
@@ -58,7 +70,6 @@ for s in sessions:
         if not sets:
             st.caption("No sets logged.")
         else:
-            # Group by exercise
             by_exercise: dict = {}
             for set_data in sorted(sets, key=lambda x: (x.get("exercise", ""), x.get("set_number", 0))):
                 ex = set_data.get("exercise", "unknown")
@@ -83,3 +94,24 @@ for s in sessions:
 
         if s.get("notes"):
             st.caption(f"Notes: {s['notes']}")
+
+        # ── vs previous same day ──────────────────────────────────────────────
+        prev = prev_by_id.get(s["id"])
+        if prev and prev.get("sets"):
+            prev_sets = prev.get("sets") or []
+            prev_by_ex: dict = {}
+            for sd in prev_sets:
+                ex = sd.get("exercise", "")
+                if ex:
+                    prev_by_ex.setdefault(ex, []).append(sd)
+
+            if prev_by_ex:
+                parts = []
+                for ex, ex_sets in prev_by_ex.items():
+                    ex_name = ex.replace("_", " ").title()
+                    weights = [
+                        f"{units.format_weight(units.cols_to_kg(sd['kg_whole'], sd['kg_half']), unit)}×{sd['reps']}"
+                        for sd in sorted(ex_sets, key=lambda x: x.get("set_number", 0))
+                    ]
+                    parts.append(f"{ex_name}: {', '.join(weights)}")
+                st.caption(f"vs {prev['date']}: " + "  |  ".join(parts))

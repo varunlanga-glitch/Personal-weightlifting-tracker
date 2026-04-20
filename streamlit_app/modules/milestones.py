@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from .program import BASELINE, TARGETS
 
 
-def project_milestone(history: list, target_kg: float, exercise: str = None) -> dict:
+def project_milestone(history: list, target_kg: float, exercise: str = None, user_baselines: dict = None) -> dict:
     if not history or len(history) < 2:
         return {
             "eta_date": None,
@@ -23,7 +23,8 @@ def project_milestone(history: list, target_kg: float, exercise: str = None) -> 
     rate_per_day = (current_kg - start_kg) / days_diff
     rate_per_week = rate_per_day * 7
 
-    baseline_kg = BASELINE.get(exercise, start_kg) if exercise else start_kg
+    effective_baselines = user_baselines or BASELINE
+    baseline_kg = effective_baselines.get(exercise, start_kg) if exercise else start_kg
     total_gap = target_kg - baseline_kg
     pct_complete = (
         max(0, min(100, round(((current_kg - baseline_kg) / total_gap) * 100)))
