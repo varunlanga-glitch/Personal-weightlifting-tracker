@@ -190,9 +190,12 @@ for ex in day_plan["exercises"]:
                 rpe = rpe_col.number_input("RPE", min_value=1.0, max_value=10.0, value=7.0, step=0.5)
                 if st.form_submit_button("Log Set", type="primary"):
                     kg_val = units.display_to_kg(weight, unit)
-                    user_data.log_set(supabase, session["id"], ex["exercise"], next_num, kg_val, reps, rpe)
-                    st.cache_data.clear()
-                    st.rerun()
+                    try:
+                        user_data.log_set(supabase, session["id"], ex["exercise"], next_num, kg_val, int(reps), float(rpe))
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as _err:
+                        st.error(f"Failed to log set: {_err}")
         elif next_num > ex["sets"]:
             st.success(f"All {ex['sets']} sets logged.")
 
