@@ -26,7 +26,7 @@ def project_milestone(history: list, target_kg: float, exercise: str = None) -> 
     baseline_kg = BASELINE.get(exercise, start_kg) if exercise else start_kg
     total_gap = target_kg - baseline_kg
     pct_complete = (
-        min(100, round(((current_kg - baseline_kg) / total_gap) * 100))
+        max(0, min(100, round(((current_kg - baseline_kg) / total_gap) * 100)))
         if total_gap > 0
         else 100
     )
