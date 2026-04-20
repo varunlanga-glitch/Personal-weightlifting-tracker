@@ -26,7 +26,6 @@ def create_session(supabase, date: str, week_number: int, mesocycle: int, day_la
             "body_feel": "good",
             "completed": False,
         })
-        .select()
         .execute()
     )
     return result.data[0] if result.data else None
@@ -92,7 +91,6 @@ def log_set(
             "completed": True,
             "notes": notes,
         })
-        .select()
         .execute()
     )
     return result.data[0] if result.data else None
