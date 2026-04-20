@@ -187,11 +187,11 @@ for ex in day_plan["exercises"]:
                     format=fmt_str,
                 )
                 reps = r_col.number_input("Reps", min_value=1, max_value=20, value=int(ex["reps"]), step=1)
-                rpe = rpe_col.number_input("RPE", min_value=1.0, max_value=10.0, value=7.0, step=0.5)
+                rpe = rpe_col.number_input("RPE", min_value=1, max_value=10, value=7, step=1)
                 if st.form_submit_button("Log Set", type="primary"):
                     kg_val = units.display_to_kg(weight, unit)
                     try:
-                        user_data.log_set(supabase, session["id"], ex["exercise"], next_num, kg_val, int(reps), float(rpe))
+                        user_data.log_set(supabase, session["id"], ex["exercise"], next_num, kg_val, int(reps), rpe)
                         st.cache_data.clear()
                         st.rerun()
                     except Exception as _err:
